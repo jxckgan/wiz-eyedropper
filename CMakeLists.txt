@@ -20,7 +20,7 @@ if(WIN32)
     endif()
     
     if(NOT EXISTS ${CMAKE_BINARY_DIR}/resource.h)
-        configure_file(${SRC_DIR}/src/resource.h ${CMAKE_BINARY_DIR}/resource.h COPYONLY)
+        configure_file(${SRC_DIR}/resource.h ${CMAKE_BINARY_DIR}/resource.h COPYONLY)
     endif()
     
     # Add Windows app manifest
