@@ -215,6 +215,7 @@ private:
 };
 
 // Overlay for mouse-based position selection
+// Overlay for mouse-based position selection
 class EyedropperOverlay : public QWidget {
     Q_OBJECT
 public:
@@ -223,12 +224,23 @@ public:
         setAttribute(Qt::WA_TranslucentBackground);
         setAttribute(Qt::WA_DeleteOnClose);
         setMouseTracking(true);
-        setCursor(Qt::CrossCursor);
+        setCursor(Qt::BlankCursor); // Hide the system cursor
+        
+        // Get the combined screen geometry to cover all monitors
         QRect geometry;
         for (QScreen *screen : QGuiApplication::screens()) {
             geometry = geometry.united(screen->geometry());
         }
         setGeometry(geometry);
+        
+        // Start with the current cursor position
+        m_currentPos = QCursor::pos();
+        m_screenPos = m_currentPos;
+        
+        // Set up timer for smooth cursor tracking
+        m_cursorTrackTimer = new QTimer(this);
+        connect(m_cursorTrackTimer, &QTimer::timeout, this, &EyedropperOverlay::updateCursorPosition);
+        m_cursorTrackTimer->start(10); // Update every 10ms for smooth tracking
         
         #ifdef Q_OS_WIN
         showFullScreen();
@@ -241,45 +253,52 @@ signals:
 protected:
     void paintEvent(QPaintEvent *) override {
         QPainter painter(this);
-        painter.setPen(QPen(Qt::white, 2));
-        painter.drawLine(m_currentPos.x() - 15, m_currentPos.y(), m_currentPos.x() + 15, m_currentPos.y());
-        painter.drawLine(m_currentPos.x(), m_currentPos.y() - 15, m_currentPos.x(), m_currentPos.y() + 15);
+        painter.setRenderHint(QPainter::Antialiasing);
         
+        // Draw black outline crosshair for visibility
         painter.setPen(QPen(Qt::black, 4));
         painter.drawLine(m_currentPos.x() - 15, m_currentPos.y(), m_currentPos.x() + 15, m_currentPos.y());
         painter.drawLine(m_currentPos.x(), m_currentPos.y() - 15, m_currentPos.x(), m_currentPos.y() + 15);
         
+        // Draw white crosshair
         painter.setPen(QPen(Qt::white, 2));
         painter.drawLine(m_currentPos.x() - 15, m_currentPos.y(), m_currentPos.x() + 15, m_currentPos.y());
         painter.drawLine(m_currentPos.x(), m_currentPos.y() - 15, m_currentPos.x(), m_currentPos.y() + 15);
         
-        painter.fillRect(m_currentPos.x() + 20, m_currentPos.y() + 20, 80, 20, QColor(0, 0, 0, 180));
+        // Draw circle indicator
+        painter.setPen(QPen(Qt::white, 1));
+        painter.drawEllipse(m_currentPos, 5, 5);
+        
+        // Draw a small rectangle with position text
+        painter.fillRect(m_currentPos.x() + 20, m_currentPos.y() + 20, 100, 20, QColor(0, 0, 0, 180));
         painter.setPen(Qt::white);
         painter.drawText(m_currentPos.x() + 25, m_currentPos.y() + 35, 
                         QString("(%1, %2)").arg(m_screenPos.x()).arg(m_screenPos.y()));
     }
 
-    void mouseMoveEvent(QMouseEvent *event) override {
-        m_currentPos = event->pos();
-        #ifdef Q_OS_WIN
-        m_screenPos = mapToGlobal(m_currentPos);
-        #else
-        m_screenPos = m_currentPos;
-        #endif
+    void updateCursorPosition() {
+        // Get the real cursor position
+        QPoint globalCursorPos = QCursor::pos();
         
-        update();
+        // Map from global coordinates to widget coordinates
+        m_currentPos = mapFromGlobal(globalCursorPos);
+        m_screenPos = globalCursorPos;
+        
+        update(); // Repaint the widget
+    }
+
+    void mouseMoveEvent(QMouseEvent *event) override {
+        // We're using the timer for tracking instead
+        // but keep this to ensure system cursor visibility state is maintained
+        event->accept();
     }
 
     void mousePressEvent(QMouseEvent *event) override {
         if (event->button() == Qt::LeftButton) {
-            #ifdef Q_OS_WIN
-            QPoint globalPos = mapToGlobal(event->pos());
-            emit positionSelected(globalPos);
-            #else
-            emit positionSelected(event->globalPos());
-            #endif
+            emit positionSelected(m_screenPos);
             close();
         } else if (event->button() == Qt::RightButton) {
+            // Cancel selection on right-click
             close();
         }
     }
@@ -289,10 +308,16 @@ protected:
             close();
         }
     }
+    
+    void closeEvent(QCloseEvent *event) override {
+        m_cursorTrackTimer->stop();
+        QWidget::closeEvent(event);
+    }
 
 private:
-    QPoint m_currentPos;
-    QPoint m_screenPos;
+    QPoint m_currentPos;   // Position in widget coordinates
+    QPoint m_screenPos;    // Position in screen coordinates
+    QTimer *m_cursorTrackTimer;
 };
 
 class WizLedController : public QMainWindow {
@@ -541,25 +566,36 @@ private slots:
     }
     
     void startEyedropperMode() {
+        // Store current capture state
         bool wasActive = m_captureActive;
+        
+        // Stop capture while picking position
         if (m_captureActive) {
             m_captureActive = false;
             m_captureThread->stopCapture();
         }
-
+        
+        // Wait briefly for any pending operations
+        QApplication::processEvents();
+        
+        // Create and show the eyedropper overlay
         EyedropperOverlay *overlay = new EyedropperOverlay();
         connect(overlay, &EyedropperOverlay::positionSelected, this, [this, wasActive](const QPoint &pos) {
+            // Update position values
             m_xSpinBox->setValue(pos.x());
             m_ySpinBox->setValue(pos.y());
             onCapturePositionChanged();
             m_statusLabel->setText(QString("Position set to (%1, %2)").arg(pos.x()).arg(pos.y()));
-
+            
+            // Restart capture if it was active before
             if (wasActive && !m_captureActive) {
                 toggleCapture();
             }
         });
         
+        // In case the overlay is closed without selection
         connect(overlay, &EyedropperOverlay::destroyed, this, [this, wasActive]() {
+            // Restart capture if it was active before and not restarted by position selection
             if (wasActive && !m_captureActive) {
                 toggleCapture();
             }
