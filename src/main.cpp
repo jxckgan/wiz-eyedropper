@@ -224,12 +224,15 @@ public:
         setAttribute(Qt::WA_DeleteOnClose);
         setMouseTracking(true);
         setCursor(Qt::CrossCursor);
-
         QRect geometry;
         for (QScreen *screen : QGuiApplication::screens()) {
             geometry = geometry.united(screen->geometry());
         }
         setGeometry(geometry);
+        
+        #ifdef Q_OS_WIN
+        showFullScreen();
+        #endif
     }
 
 signals:
@@ -241,22 +244,55 @@ protected:
         painter.setPen(QPen(Qt::white, 2));
         painter.drawLine(m_currentPos.x() - 15, m_currentPos.y(), m_currentPos.x() + 15, m_currentPos.y());
         painter.drawLine(m_currentPos.x(), m_currentPos.y() - 15, m_currentPos.x(), m_currentPos.y() + 15);
+        
+        painter.setPen(QPen(Qt::black, 4));
+        painter.drawLine(m_currentPos.x() - 15, m_currentPos.y(), m_currentPos.x() + 15, m_currentPos.y());
+        painter.drawLine(m_currentPos.x(), m_currentPos.y() - 15, m_currentPos.x(), m_currentPos.y() + 15);
+        
+        painter.setPen(QPen(Qt::white, 2));
+        painter.drawLine(m_currentPos.x() - 15, m_currentPos.y(), m_currentPos.x() + 15, m_currentPos.y());
+        painter.drawLine(m_currentPos.x(), m_currentPos.y() - 15, m_currentPos.x(), m_currentPos.y() + 15);
+        
+        painter.fillRect(m_currentPos.x() + 20, m_currentPos.y() + 20, 80, 20, QColor(0, 0, 0, 180));
+        painter.setPen(Qt::white);
+        painter.drawText(m_currentPos.x() + 25, m_currentPos.y() + 35, 
+                        QString("(%1, %2)").arg(m_screenPos.x()).arg(m_screenPos.y()));
     }
 
     void mouseMoveEvent(QMouseEvent *event) override {
-        m_currentPos = event->globalPos();
+        m_currentPos = event->pos();
+        #ifdef Q_OS_WIN
+        m_screenPos = mapToGlobal(m_currentPos);
+        #else
+        m_screenPos = m_currentPos;
+        #endif
+        
         update();
     }
 
     void mousePressEvent(QMouseEvent *event) override {
         if (event->button() == Qt::LeftButton) {
+            #ifdef Q_OS_WIN
+            QPoint globalPos = mapToGlobal(event->pos());
+            emit positionSelected(globalPos);
+            #else
             emit positionSelected(event->globalPos());
+            #endif
+            close();
+        } else if (event->button() == Qt::RightButton) {
+            close();
+        }
+    }
+    
+    void keyPressEvent(QKeyEvent *event) override {
+        if (event->key() == Qt::Key_Escape) {
             close();
         }
     }
 
 private:
     QPoint m_currentPos;
+    QPoint m_screenPos;
 };
 
 class WizLedController : public QMainWindow {
@@ -505,14 +541,36 @@ private slots:
     }
     
     void startEyedropperMode() {
+        bool wasActive = m_captureActive;
+        if (m_captureActive) {
+            m_captureActive = false;
+            m_captureThread->stopCapture();
+        }
+
         EyedropperOverlay *overlay = new EyedropperOverlay();
-        connect(overlay, &EyedropperOverlay::positionSelected, this, [this](const QPoint &pos) {
+        connect(overlay, &EyedropperOverlay::positionSelected, this, [this, wasActive](const QPoint &pos) {
             m_xSpinBox->setValue(pos.x());
             m_ySpinBox->setValue(pos.y());
             onCapturePositionChanged();
             m_statusLabel->setText(QString("Position set to (%1, %2)").arg(pos.x()).arg(pos.y()));
+
+            if (wasActive && !m_captureActive) {
+                toggleCapture();
+            }
         });
+        
+        connect(overlay, &EyedropperOverlay::destroyed, this, [this, wasActive]() {
+            if (wasActive && !m_captureActive) {
+                toggleCapture();
+            }
+        });
+        
         overlay->show();
+        
+        #ifdef Q_OS_WIN
+        overlay->activateWindow();
+        overlay->raise();
+        #endif
     }
 
     void toggleCapture() {
