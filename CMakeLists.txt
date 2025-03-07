@@ -12,7 +12,7 @@ set(SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
 # Windows-specific configurations
 if(WIN32)
     enable_language(RC)
-    set(WIN_RC_FILE ${CMAKE_CURRENT_SOURCE_DIR}/app.rc)
+    set(WIN_RC_FILE ${SRC_DIR}/app.rc)
     set(APP_ICON_FILE ${CMAKE_CURRENT_SOURCE_DIR}/meta/app.ico)
     
     if(NOT EXISTS ${CMAKE_BINARY_DIR}/app.ico)
@@ -20,7 +20,7 @@ if(WIN32)
     endif()
     
     if(NOT EXISTS ${CMAKE_BINARY_DIR}/resource.h)
-        configure_file(${CMAKE_CURRENT_SOURCE_DIR}/src/resource.h ${CMAKE_BINARY_DIR}/resource.h COPYONLY)
+        configure_file(${SRC_DIR}/src/resource.h ${CMAKE_BINARY_DIR}/resource.h COPYONLY)
     endif()
     
     # Add Windows app manifest
