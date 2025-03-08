@@ -324,14 +324,14 @@ class WizLedController : public QMainWindow {
     Q_OBJECT
 public:
     WizLedController(QWidget *parent = nullptr) : QMainWindow(parent) {
-        setWindowTitle("Wiz LED Colour Controller (Ultra Low Latency)");
+        setWindowTitle("WiZ Eyedropper");
         resize(400, 400);
 
         m_captureActive = false;
         m_captureX = QGuiApplication::primaryScreen()->geometry().width() / 2;
         m_captureY = QGuiApplication::primaryScreen()->geometry().height() / 2;
         m_captureSize = 10;
-        m_wizIp = "192.168.50.110";
+        m_wizIp = "192.168.";
         m_wizPort = 38899;
         m_brightness = 100;
         m_updateThreshold = 3;

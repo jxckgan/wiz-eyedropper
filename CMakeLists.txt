@@ -25,7 +25,7 @@ if(WIN32)
     
     # Add Windows app manifest
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /MANIFEST:NO")
-    set(APP_MANIFEST_FILE ${CMAKE_CURRENT_SOURCE_DIR}/app.manifest)
+    set(APP_MANIFEST_FILE ${CMAKE_CURRENT_SOURCE_DIR}/meta/app.manifest)
     
     # Define Windows executable type (GUI application)
     set(CMAKE_WIN32_EXECUTABLE ON)
